@@ -6,6 +6,9 @@ import numbers
 from operator import itemgetter
 import itertools
 from functools import lru_cache as cache
+import copy
+from statistics import median
+from decimal import Decimal
 
 DEFAULT_X_TOLERANCE = 3
 DEFAULT_Y_TOLERANCE = 3
@@ -364,6 +367,27 @@ def extract_words(chars, **kwargs):
     return WordExtractor(**settings).extract(chars)
 
 
+def add_empty_lines(doctop_clusters):
+    """Add newline to lines when it appears to be much space to the next line"""
+    pos_getter = itemgetter("doctop")
+    size_getter = itemgetter("size")
+
+    pos0 = median(map(pos_getter, doctop_clusters[0]))
+    for line_chars in doctop_clusters[1:]:
+        pos1 = median(map(pos_getter, line_chars))
+        size = size_getter(line_chars[0])
+
+        if pos1 - pos0 > (size * Decimal(1.5)):
+            newline = copy.copy(line_chars[0])
+            newline["text"] = "\n"
+            newline["x0"] = Decimal(0)
+            line_chars.insert(0, newline)
+
+        pos0 = pos1
+
+    return doctop_clusters
+
+
 def extract_text(
     chars,
     x_tolerance=DEFAULT_X_TOLERANCE,
@@ -374,6 +398,8 @@ def extract_text(
         return None
 
     doctop_clusters = cluster_objects(chars, "doctop", y_tolerance)
+    
+    doctop_clusters = add_empty_lines(doctop_clusters)
 
     lines = (collate_line(line_chars, x_tolerance) for line_chars in doctop_clusters)
 
